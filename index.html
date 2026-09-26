@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="Calistenia">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230f172a'/><text y='.9em' font-size='80'>🏋️</text></svg>">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏋️</text></svg>">
-<title>Calistenia Trainer v44</title>
+<title>Calistenia Trainer v45</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
@@ -146,7 +146,7 @@
 
 <!-- Paso 1: Inicio -->
 <div class="card" id="step1">
-  <h1>Programa de calistenia<br>UMBRAKABLE 50 sesiones<br><span class="subtitle-author">(de Marcos Vázquez) · v44</span></h1>
+  <h1>Programa de calistenia<br>UMBRAKABLE 50 sesiones<br><span class="subtitle-author">(de Marcos Vázquez) · v45</span></h1>
   <div class="reminder">Recuerda hacer 5 sesiones por semana (la 5ª sesión es de Flow).</div>
 
   <button onclick="openMusicList()" class="btn-secondary">🎵 ¿Quieres reproducir una canción de fondo?</button>
@@ -874,7 +874,7 @@ function formatTime(s) {
 }
 
 /* ---------- CONTEO DE REPETICIONES EN VOZ ALTA ---------- */
-const SPEEDS = { lento: 4, medio: 2, rapido: 1 };   // segundos por repetición
+const SPEEDS = { lento: 3, medio: 2, rapido: 1 };   // segundos por repetición
 const SPEED_NAMES = { lento: 'lento', medio: 'medio', rapido: 'rápido' };
 const COUNT_LEAD = 6;        // segundos para colocarse y oír la frase antes del «uno»
 const PACE_KEY = 'calistenia-ritmos';
