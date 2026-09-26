@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="Calistenia">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230f172a'/><text y='.9em' font-size='80'>🏋️</text></svg>">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏋️</text></svg>">
-<title>Calistenia Trainer v49</title>
+<title>Calistenia Trainer v51</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
@@ -40,6 +40,12 @@
   .video-container iframe { position: absolute; top: 0; left: 0; width: 1px; height: 1px; border: 0; }
 
   .flow-video { position: relative; width: 100%; aspect-ratio: 9 / 16; max-height: 65vh; border-radius: 0.5rem; overflow: hidden; background: #000; margin-bottom: 1rem; }
+  .flow-video.train { max-height: 50vh; margin-top: 1rem; }
+  .ex-video { position: relative; width: 100%; aspect-ratio: 16 / 9; margin: 0.8rem auto 0; border-radius: 0.5rem; overflow: hidden; background: #000; }
+  .ex-video.small { width: 62%; }
+  .ex-video.vertical { aspect-ratio: 9 / 16; width: min(62%, calc(48vh * 9 / 16)); }
+  .ex-video.vertical.small { width: min(40%, calc(28vh * 9 / 16)); }
+  .ex-video iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
   .flow-video iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
 
   /* Music list */
@@ -151,7 +157,7 @@
 
 <!-- Paso 1: Inicio -->
 <div class="card" id="step1">
-  <h1>Programa de calistenia<br>UMBRAKABLE 50 sesiones<br><span class="subtitle-author">(de Marcos Vázquez) · v49</span></h1>
+  <h1>Programa de calistenia<br>UMBRAKABLE 50 sesiones<br><span class="subtitle-author">(de Marcos Vázquez) · v51</span></h1>
   <div class="reminder">Recuerda hacer 5 sesiones por semana (la 5ª sesión es de Flow).</div>
 
   <button onclick="openMusicList()" class="btn-secondary">🎵 ¿Quieres reproducir una canción de fondo?</button>
@@ -234,6 +240,8 @@
     <div class="timer rest" id="flowRestTimer">00:10</div>
   </div>
 
+  <div class="flow-video train hidden" id="flowTrainVideo"></div>
+
   <div id="flowDoneAllView" class="hidden">
     <div class="done-icon">🎉</div>
     <div class="exercise-name">¡Flow completado!</div>
@@ -270,6 +278,7 @@
       <button onclick="togglePause()" id="pauseBtn">Pausar</button>
       <button onclick="skipSegment()" class="btn-secondary">Hecho / Saltar</button>
     </div>
+    <div class="ex-video hidden" id="workoutVideo"></div>
     <div id="weightBox" class="hidden" style="margin-top: 0.8rem;"></div>
 
     <div id="liveAdjust" class="live-adjust hidden">
@@ -292,6 +301,7 @@
     <div class="progress" id="readyProgressLabel"></div>
     <div class="timer" id="readyTimerDisplay">⏸</div>
     <button onclick="confirmStartPending()">Iniciar</button>
+    <div class="ex-video small hidden" id="readyVideo"></div>
     <div id="readyWeightBox" class="hidden" style="margin-top: 0.8rem;"></div>
   </div>
 
@@ -537,6 +547,32 @@ function renderPlanHtml(plan) {
     html += '</div>';
   });
   return html;
+}
+
+/* ---------- VÍDEO DEL EJERCICIO (YouTube, en bucle y sin sonido) ---------- */
+function ytId(url) {
+  const m = String(url || '').match(/(?:shorts\/|youtu\.be\/|[?&]v=|embed\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+// Solo recarga el vídeo si cambia de ejercicio (mismo ejercicio en varias rondas = no se vuelve a cargar)
+function setExVideo(boxId, url, small) {
+  const box = document.getElementById(boxId);
+  const id = ytId(url);
+  if (!id) { clearExVideo(boxId); return false; }
+  if (box.dataset.vid !== id) {
+    box.innerHTML = `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}&playsinline=1&rel=0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+    box.dataset.vid = id;
+  }
+  box.classList.toggle('vertical', /shorts\//.test(url));
+  box.classList.toggle('small', !!small);
+  box.classList.remove('hidden');
+  return true;
+}
+function clearExVideo(boxId) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  if (box.dataset.vid) { box.innerHTML = ''; box.dataset.vid = ''; }
+  box.classList.add('hidden');
 }
 
 function progressText(seg) {
@@ -1089,7 +1125,15 @@ function render() {
 
   const thumbBig = document.getElementById('exerciseThumbBig');
   const thumbSrc = seg.isRest ? null : thumbFor(seg.name);
-  if (thumbSrc) {
+
+  // Vídeo: el del ejercicio mientras lo haces; en el descanso, el del siguiente en pequeño
+  const nxt = segments[currentIndex + 1];
+  let vUrl = null, vSmall = false;
+  if (!seg.isRest && !seg.isWarmup && seg.video) vUrl = seg.video;
+  else if (seg.isRest && nxt && !nxt.isRest && !nxt.isWarmup && nxt.video) { vUrl = nxt.video; vSmall = true; }
+  const hasVideo = setExVideo('workoutVideo', vUrl, vSmall);
+
+  if (thumbSrc && !(hasVideo && !seg.isRest)) {
     thumbBig.src = thumbSrc;
     thumbBig.classList.remove('hidden');
   } else {
@@ -1255,9 +1299,12 @@ function handleSegmentEnd() {
     readyDetail.classList.add('hidden');
   }
   fillWeightBox(document.getElementById('readyWeightBox'), nextSeg);
+  clearExVideo('workoutVideo');   // el de la pantalla anterior queda oculto: se detiene para no gastar datos
+  setExVideo('readyVideo', (!nextSeg.isWarmup && !nextSeg.isRest) ? nextSeg.video : null, true);
 }
 
 function confirmStartPending() {
+  clearExVideo('readyVideo');
   const prevSeg = segments[currentIndex];
   currentIndex = pendingIndex;
   const seg = segments[currentIndex];
@@ -1341,6 +1388,8 @@ function skipSegment() {
 async function finishWorkout() {
   finished = true;
   clearInterval(intervalId);
+  clearExVideo('workoutVideo');
+  clearExVideo('readyVideo');
   document.getElementById('workoutView').classList.add('hidden');
   document.getElementById('doneView').classList.remove('hidden');
   const totalMain = segments.filter(s => !s.isWarmup && !s.isRest).length;
@@ -1377,6 +1426,8 @@ function goToPreviousSegment() {
 
 function backToSetup() {
   clearInterval(intervalId);
+  clearExVideo('workoutVideo');
+  clearExVideo('readyVideo');
   releaseWakeLock();
   document.getElementById('step3').classList.add('hidden');
   document.getElementById('step2').classList.remove('hidden');
@@ -1444,8 +1495,15 @@ function openFlowVideo(key) {
   document.getElementById('stepFlowVideo').classList.remove('hidden');
 }
 
+function stopFlowTrainVideo() {
+  const tv = document.getElementById('flowTrainVideo');
+  tv.innerHTML = '';
+  tv.classList.add('hidden');
+}
+
 function backToFlowMenu() {
   clearInterval(flowRestInterval);
+  stopFlowTrainVideo();
   document.getElementById('flowVideoContainer').innerHTML = '';
   document.getElementById('stepFlowVideo').classList.add('hidden');
   document.getElementById('stepFlowTrain').classList.add('hidden');
@@ -1456,6 +1514,13 @@ function backToFlowMenu() {
 function startFlowTraining() {
   if (!commitTimeStr) fixCommitment();
   flowRound = 1;
+  // El vídeo de la pantalla anterior se quita (si no, seguiría sonando oculto)
+  document.getElementById('flowVideoContainer').innerHTML = '';
+  // Vídeo del Flow en bucle, sin sonido, durante todas las rondas
+  const tv = document.getElementById('flowTrainVideo');
+  const id = currentFlow.id;
+  tv.innerHTML = `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}&playsinline=1&rel=0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+  tv.classList.remove('hidden');
   document.getElementById('flowTrainTitle').innerText = `Flow ${currentFlow.key}`;
   document.getElementById('stepFlowVideo').classList.add('hidden');
   document.getElementById('stepFlowTrain').classList.remove('hidden');
@@ -1474,6 +1539,7 @@ function markRoundDone() {
   document.getElementById('flowActiveView').classList.add('hidden');
 
   if (flowRound >= FLOW_TOTAL_ROUNDS) {
+    stopFlowTrainVideo();
     document.getElementById('flowDoneAllView').classList.remove('hidden');
     document.getElementById('flowDoneSummary').innerText = 'Registrando sesión…';
     celebrateSessionComplete('Flow')
@@ -1763,9 +1829,9 @@ async function celebrateSessionComplete(type) {
   flashScreen(3);
   playFireworks(5500);
   playCelebrationSound();
-  speakSequential(['Felicidades. Has terminado una sesión.']);
-  speakDelayed('Recuerda hacerte el batido de proteínas y creatina.', CELEBRATION_SOUND_DURATION_MS + 2000);
   const num = selectedSessionNumber || 1;
+  speakSequential([`Felicidades. Has terminado la sesión ${num}.`]);
+  speakDelayed('Recuerda hacerte el batido de proteínas y creatina.', CELEBRATION_SOUND_DURATION_MS + 2000);
   return await recordSession(type, num);
 }
 
