@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="Calistenia">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230f172a'/><text y='.9em' font-size='80'>🏋️</text></svg>">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏋️</text></svg>">
-<title>Calistenia Trainer v43</title>
+<title>Calistenia Trainer v44</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
@@ -66,7 +66,8 @@
   .plan-head { font-size: 0.8rem; font-weight: 700; color: #38bdf8; margin-bottom: 0.35rem; line-height: 1.35; }
   .plan-group { border-left: 3px solid #818cf8; padding-left: 0.5rem; margin: 0.25rem 0; }
   .plan-group-head { font-size: 0.75rem; font-weight: 700; color: #818cf8; }
-  .plan-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.22rem 0; }
+  .plan-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.22rem 0.2rem; border-radius: 0.4rem; cursor: pointer; }
+  .plan-row:active { background: rgba(56,189,248,0.15); }
   .plan-name { flex: 1; font-size: 0.9rem; color: #e2e8f0; }
   .plan-name b { color: #4ade80; font-weight: 700; white-space: nowrap; }
   .plan-x { font-size: 0.75rem; font-weight: 800; color: #818cf8; margin-left: 0.3rem; }
@@ -145,7 +146,7 @@
 
 <!-- Paso 1: Inicio -->
 <div class="card" id="step1">
-  <h1>Programa de calistenia<br>UMBRAKABLE 50 sesiones<br><span class="subtitle-author">(de Marcos Vázquez) · v43</span></h1>
+  <h1>Programa de calistenia<br>UMBRAKABLE 50 sesiones<br><span class="subtitle-author">(de Marcos Vázquez) · v44</span></h1>
   <div class="reminder">Recuerda hacer 5 sesiones por semana (la 5ª sesión es de Flow).</div>
 
   <button onclick="openMusicList()" class="btn-secondary">🎵 ¿Quieres reproducir una canción de fondo?</button>
@@ -454,22 +455,29 @@ function collapsePairs(exs) {
     const e = exs[i], n = exs[i + 1];
     if (n && / izquierda$/i.test(e[0]) && / derecha$/i.test(n[0]) &&
         e[0].replace(/ izquierda$/i, '') === n[0].replace(/ derecha$/i, '')) {
-      out.push({ ex: [e[0].replace(/ izquierda$/i, ''), e[1], e[2], e[3] || n[3]], sides: true });
+      out.push({ ex: [e[0].replace(/ izquierda$/i, ''), e[1], e[2], e[3] || n[3]], sides: true, idx: i });
       i++;
     } else {
-      out.push({ ex: e, sides: false });
+      out.push({ ex: e, sides: false, idx: i });
     }
   }
   return out;
 }
 
-function planRowHtml(ex, xTag) {
+function planRowHtml(ex, xTag, from) {
   const [name, med, q, video] = ex;
   const src = thumbFor(name);
   const img = src ? `<img class="exercise-thumb" src="${src}" alt="">` : '<span class="exercise-thumb plan-thumb-empty"></span>';
-  const vid = video ? `<a class="video-link" href="${video}" target="_blank" rel="noopener" title="Ver vídeo del ejercicio">▶</a>` : '';
+  const vid = video ? `<a class="video-link" href="${video}" target="_blank" rel="noopener" title="Ver vídeo del ejercicio" onclick="event.stopPropagation()">▶</a>` : '';
   const x = xTag ? `<span class="plan-x">${xTag}</span>` : '';
-  return `<div class="plan-row">${img}<span class="plan-name">${escapeHtml(name)} <b>${qtyText(med, q)}</b>${x}</span>${vid}</div>`;
+  const click = from ? ` data-from="${from}" data-name="${escapeHtml(name)}" onclick="startFromRow(this)"` : '';
+  return `<div class="plan-row"${click}>${img}<span class="plan-name">${escapeHtml(name)} <b>${qtyText(med, q)}</b>${x}</span>${vid}</div>`;
+}
+
+// Tocar un ejercicio de la lista: empezar el entrenamiento desde ahí
+function startFromRow(el) {
+  if (!confirm(`¿Empezar el entrenamiento desde «${el.dataset.name}»?`)) return;
+  startWorkout(el.dataset.from);
 }
 
 function blockHead(b, i) {
@@ -498,14 +506,15 @@ function renderPlanHtml(plan) {
     shown.add(k);
     return weightFieldHtml(k);
   };
-  let html = '<h2>1 Calentamiento</h2><div class="plan-block">';
-  plan.w.forEach(([x, exs]) => {
+  let html = '<p class="hint">Toca un ejercicio para empezar el entrenamiento desde ahí.</p>';
+  html += '<h2>1 Calentamiento</h2><div class="plan-block">';
+  plan.w.forEach(([x, exs], bi) => {
     if (exs.length > 1) {
       html += `<div class="plan-group"><div class="plan-group-head">×${x} · se repiten juntos</div>` +
-        exs.map(e => planRowHtml(e, isUnilateralWarmup(e[0]) ? SIDE_TAG : '')).join('') + '</div>';
+        exs.map((e, ei) => planRowHtml(e, isUnilateralWarmup(e[0]) ? SIDE_TAG : '', `w:${bi}:${ei}`)).join('') + '</div>';
     } else {
       const tags = [isUnilateralWarmup(exs[0][0]) ? SIDE_TAG : '', x > 1 ? `×${x}` : ''].filter(Boolean).join(' · ');
-      html += planRowHtml(exs[0], tags);
+      html += planRowHtml(exs[0], tags, `w:${bi}:0`);
     }
   });
   html += '<p class="hint">En los de repeticiones la app cuenta en voz alta; el ritmo (lento, medio o rápido) lo eliges en cada ejercicio.</p></div>';
@@ -519,8 +528,7 @@ function renderPlanHtml(plan) {
   }
   plan.m.forEach((b, i) => {
     html += `<div class="plan-block"><div class="plan-head">${blockHead(b, i + 1)}</div>`;
-    collapsePairs(b.ex).forEach(r => { html += planRowHtml(r.ex, r.sides ? SIDE_TAG : ''); });
-    b.ex.forEach(e => { html += weightAfter(e[0]); });
+    collapsePairs(b.ex).forEach(r => { html += planRowHtml(r.ex, r.sides ? SIDE_TAG : '', b.t === 'f' ? `m:${i}:*` : `m:${i}:${r.idx}`); });
     html += '</div>';
   });
   return html;
@@ -914,10 +922,11 @@ function buildPlanSegments(plan, repSec, flowSession) {
 
   // Calentamiento: cada bloque se repite sus veces; los de reps llevan 30 s (el 1º, 60 s)
   const wList = [];
-  plan.w.forEach(([x, exs]) => {
-    for (let v = 1; v <= x; v++) exs.forEach(ex => {
-      if (isUnilateralWarmup(ex[0])) ['Izquierda', 'Derecha'].forEach(side => wList.push({ ex, v, x, side }));
-      else wList.push({ ex, v, x });
+  plan.w.forEach(([x, exs], bi) => {
+    for (let v = 1; v <= x; v++) exs.forEach((ex, ei) => {
+      const from = `w:${bi}:${ei}`;
+      if (isUnilateralWarmup(ex[0])) ['Izquierda', 'Derecha'].forEach(side => wList.push({ ex, v, x, side, from }));
+      else wList.push({ ex, v, x, from });
     });
   });
   wList.forEach((it, i) => {
@@ -930,7 +939,7 @@ function buildPlanSegments(plan, repSec, flowSession) {
     segs.push({
       name: label, isRest: false, isWarmup: true,
       duration: med === 's' ? q : (countW ? COUNT_LEAD + q * paceW : (i === 0 ? 60 : 30)),
-      countReps: countW ? q : 0, pace: paceW, fastPace: countW && isFastRep(name0), exName: name0,
+      countReps: countW ? q : 0, pace: paceW, fastPace: countW && isFastRep(name0), exName: name0, from: it.from,
       posInGroup: i + 1, totalInGroup: wList.length
     });
   });
@@ -950,7 +959,7 @@ function buildPlanSegments(plan, repSec, flowSession) {
         isRest: false, isWarmup: false, isFixed: true, fixedCount: b.ex.length,
         duration: b.mn * 60,
         posInGroup: exNum + 1, totalInGroup: totalEx, round: 1, totalRounds: 1, blockEnd: true,
-        weightKeys: keys, video: null
+        weightKeys: keys, video: null, from: `m:${bi}:*`
       });
       if (b.d > 0 && !lastBlock) {
         segs.push({ name: 'Descanso', isRest: true, isWarmup: false, duration: b.d,
@@ -968,7 +977,7 @@ function buildPlanSegments(plan, repSec, flowSession) {
         segs.push({
           name: label, isRest: false, isWarmup: false,
           isReps: med !== 's', autoStart: b.t === 't',
-          countReps: med !== 's' ? qq : 0, pace: med !== 's' ? paceFor(name) : 0, fastPace: med !== 's' && isFastRep(name), exName: name,
+          countReps: med !== 's' ? qq : 0, pace: med !== 's' ? paceFor(name) : 0, fastPace: med !== 's' && isFastRep(name), exName: name, from: `m:${bi}:${j}`,
           duration: med === 's' ? qq : COUNT_LEAD + qq * paceFor(name),
           posInGroup: exNum + j + 1, totalInGroup: totalEx,
           round: v, totalRounds: b.x,
@@ -995,7 +1004,7 @@ function buildPlanSegments(plan, repSec, flowSession) {
 let currentRepSec = 60;
 let lastWeightIndex = -1;
 
-function startWorkout() {
+function startWorkout(fromKey) {
   const repSec = 60;
   currentSessionIsFlow = (selectedSessionNumber % 5 === 0);
   const plan = SESSION_PLAN[selectedSessionNumber];
@@ -1004,6 +1013,10 @@ function startWorkout() {
     return;
   }
   segments = buildPlanSegments(plan, repSec, currentSessionIsFlow);
+  if (typeof fromKey === 'string') {
+    const idx = segments.findIndex(s => s.from === fromKey);
+    if (idx > 0) segments = segments.slice(idx);
+  }
   fixCommitment();
   if (segments.length === 0) {
     alert('Esta sesión no tiene ejercicios.');
