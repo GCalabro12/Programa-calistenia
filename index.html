@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="Calistenia">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230f172a'/><text y='.9em' font-size='80'>🏋️</text></svg>">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏋️</text></svg>">
-<title>Calistenia Trainer v45</title>
+<title>Calistenia Trainer v47</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
@@ -146,7 +146,7 @@
 
 <!-- Paso 1: Inicio -->
 <div class="card" id="step1">
-  <h1>Programa de calistenia<br>UMBRAKABLE 50 sesiones<br><span class="subtitle-author">(de Marcos Vázquez) · v45</span></h1>
+  <h1>Programa de calistenia<br>UMBRAKABLE 50 sesiones<br><span class="subtitle-author">(de Marcos Vázquez) · v47</span></h1>
   <div class="reminder">Recuerda hacer 5 sesiones por semana (la 5ª sesión es de Flow).</div>
 
   <button onclick="openMusicList()" class="btn-secondary">🎵 ¿Quieres reproducir una canción de fondo?</button>
@@ -785,7 +785,7 @@ const WARMUP_COACH_TEXT = "Describe los movimientos y sensaciones que hay. Y si 
 const EXERCISE_COACH_TEXT = "Observa lo que hay. Y si hay reforzamiento natural.";
 
 function roundCompleteText(totalRounds) {
-  return `Usa la bebida para hidratarte. Felicidades por terminar un ejercicio de ${totalRounds} series. Evita distractores como vídeo o música con letra.`;
+  return `Usa la bebida para hidratarte. Felicidades por terminar un ejercicio de ${totalRounds} rondas. Evita distractores como vídeo o música con letra.`;
 }
 
 function speakableText(text) {
@@ -828,6 +828,7 @@ function speakDelayed(text, delayMs) {
 }
 
 function onSegmentStart(seg, prevSeg) {
+  tickPhase = 0;   // cada ejercicio empieza con el segundo completo
   const queue = [];
 
   if (isRoundEnd(prevSeg)) {
@@ -874,7 +875,7 @@ function formatTime(s) {
 }
 
 /* ---------- CONTEO DE REPETICIONES EN VOZ ALTA ---------- */
-const SPEEDS = { lento: 3, medio: 2, rapido: 1 };   // segundos por repetición
+const SPEEDS = { lento: 3.5, medio: 2.5, rapido: 1.5 };   // admite medios segundos   // segundos por repetición
 const SPEED_NAMES = { lento: 'lento', medio: 'medio', rapido: 'rápido' };
 const COUNT_LEAD = 6;        // segundos para colocarse y oír la frase antes del «uno»
 const PACE_KEY = 'calistenia-ritmos';
@@ -914,7 +915,7 @@ function setSpeed(speed) {
 }
 function repsDone(seg, tl) {
   const elapsed = seg.duration - tl - COUNT_LEAD;
-  return Math.max(0, Math.min(seg.countReps, Math.floor(elapsed / seg.pace)));
+  return Math.max(0, Math.min(seg.countReps, Math.floor(elapsed / seg.pace + 1e-9)));
 }
 
 function buildPlanSegments(plan, repSec, flowSession) {
@@ -1030,7 +1031,7 @@ function startWorkout(fromKey) {
 
   initRun();
   runTick();
-  intervalId = setInterval(runTick, 1000);
+  intervalId = setInterval(runTick, 500);
 }
 
 function initRun() {
@@ -1191,7 +1192,7 @@ function handleSegmentEnd() {
     beep(660, 0.15);
     onSegmentStart(nextSeg, prevSeg);
     render();
-    intervalId = setInterval(runTick, 1000);
+    intervalId = setInterval(runTick, 500);
     return;
   }
 
@@ -1204,7 +1205,7 @@ function handleSegmentEnd() {
     speakSequential(texts);
     beep(880, 0.15);
     render();
-    intervalId = setInterval(runTick, 1000);
+    intervalId = setInterval(runTick, 500);
     return;
   }
 
@@ -1253,7 +1254,7 @@ function confirmStartPending() {
   beep(seg.isRest ? 880 : 660, 0.15);
   onSegmentStart(seg, prevSeg);
   render();
-  intervalId = setInterval(runTick, 1000);
+  intervalId = setInterval(runTick, 500);
 }
 
 function confirmStartTraining() {
@@ -1267,7 +1268,7 @@ function confirmStartTraining() {
   beep(660, 0.15);
   onSegmentStart(seg, prevSeg);
   render();
-  intervalId = setInterval(runTick, 1000);
+  intervalId = setInterval(runTick, 500);
 }
 
 function speakNumber(n) {
@@ -1280,19 +1281,27 @@ function speakNumber(n) {
   } catch (e) {}
 }
 
-function runTick() {
+// El reloj late cada medio segundo: el conteo de repeticiones avanza de 0,5 en 0,5 s
+// y el resto de cronómetros sigue bajando de segundo en segundo (un latido sí y otro no).
+let tickPhase = 0;
+function runTick(force) {
   if (finished || paused) return;
+  const curSeg = segments[currentIndex];
+  const counting = !!(curSeg && curSeg.countReps && !curSeg.isRest);
+  if (!counting && force !== true) {
+    tickPhase = (tickPhase + 1) % 2;
+    if (tickPhase !== 0) return;
+  }
   if (timeLeft <= 0) {
     handleSegmentEnd();
     return;
   }
-  const curSeg = segments[currentIndex];
-  if (curSeg && curSeg.countReps) {
-    timeLeft--;
+  if (counting) {
+    timeLeft = Math.max(0, timeLeft - 0.5);
     const elapsed = curSeg.duration - timeLeft - COUNT_LEAD;
-    if (elapsed > 0 && elapsed % curSeg.pace === 0) {
+    if (elapsed > 0) {
       const k = elapsed / curSeg.pace;
-      if (k >= 1 && k <= curSeg.countReps) speakNumber(k);
+      if (Math.abs(k - Math.round(k)) < 1e-9 && k >= 1 && k <= curSeg.countReps) speakNumber(Math.round(k));
     }
     render();
     return;
@@ -1312,7 +1321,7 @@ function togglePause() {
 
 function skipSegment() {
   timeLeft = 0;
-  runTick();
+  runTick(true);
 }
 
 async function finishWorkout() {
@@ -1349,7 +1358,7 @@ function goToPreviousSegment() {
   document.getElementById('pauseBtn').innerText = 'Pausar';
   onSegmentStart(segments[currentIndex], null);
   render();
-  intervalId = setInterval(runTick, 1000);
+  intervalId = setInterval(runTick, 500);
 }
 
 function backToSetup() {
