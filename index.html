@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="Calistenia">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230f172a'/><text y='.9em' font-size='80'>🏋️</text></svg>">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏋️</text></svg>">
-<title>Calistenia Trainer v52</title>
+<title>Calistenia Trainer v54</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
@@ -157,7 +157,7 @@
 
 <!-- Paso 1: Inicio -->
 <div class="card" id="step1">
-  <h1>Programa de calistenia<br>UMBRAKABLE 50 sesiones<br><span class="subtitle-author">(de Marcos Vázquez) · v52</span></h1>
+  <h1>Programa de calistenia<br>UMBRAKABLE 50 sesiones<br><span class="subtitle-author">(de Marcos Vázquez) · v54</span></h1>
   <div class="reminder">Recuerda hacer 5 sesiones por semana (la 5ª sesión es de Flow).</div>
 
   <button onclick="openMusicList()" class="btn-secondary">🎵 ¿Quieres reproducir una canción de fondo?</button>
@@ -221,7 +221,7 @@
   <h1 id="flowVideoTitle">Flow</h1>
   <div class="flow-video" id="flowVideoContainer"></div>
   <button onclick="startFlowTraining()">Comenzar a entrenar el flow</button>
-  <button onclick="backToFlowMenu()" class="btn-outline">Volver</button>
+  <button onclick="backToSetupFromFlowScreens()" class="btn-outline">Volver al programa</button>
 </div>
 
 <!-- Flow: entrenamiento -->
@@ -251,7 +251,7 @@
     </div>
   </div>
 
-  <button onclick="backToFlowMenu()" class="btn-outline">Volver a Flows</button>
+  <button onclick="backToSetupFromFlowScreens()" class="btn-outline">Volver al programa</button>
 </div>
 
 <!-- Paso 3: Entrenamiento -->
@@ -322,7 +322,7 @@
   </div>
 
   <button onclick="goToPreviousSegment()" class="btn-secondary">Volver al anterior</button>
-  <button onclick="backToSetup()" class="btn-outline">Volver a configurar</button>
+  <button onclick="backToSetup()" class="btn-outline">Volver al programa</button>
 </div>
 
 <!-- Registro de sesiones -->
@@ -1506,6 +1506,17 @@ function stopFlowTrainVideo() {
   tv.classList.add('hidden');
 }
 
+// Desde el vídeo o las rondas del Flow: volver a la lista de ejercicios de la sesión
+function backToSetupFromFlowScreens() {
+  clearInterval(flowRestInterval);
+  stopFlowTrainVideo();
+  document.getElementById('flowVideoContainer').innerHTML = '';
+  releaseWakeLock();
+  hideAllTopLevel();
+  document.getElementById('step2').classList.remove('hidden');
+  window.scrollTo(0, 0);
+}
+
 function backToFlowMenu() {
   clearInterval(flowRestInterval);
   stopFlowTrainVideo();
@@ -1944,16 +1955,16 @@ function handleBack() {
     case 'stepMusic':    closeMusicList(); break;
     case 'step2':        backToMusic(); break;
     case 'stepFlowMenu': backToSetupFromFlow(); break;
-    case 'stepFlowVideo': backToFlowMenu(); break;
+    case 'stepFlowVideo': backToSetupFromFlowScreens(); break;
     case 'stepLog':
     case 'stepCalendar': closeCalendarOrLog(); break;
     case 'stepFlowTrain':
-      if (isVisible('flowDoneAllView')) { backToFlowMenu(); break; }
-      showToast('Flow en marcha. Para salir usa «Volver a Flows».');
+      if (isVisible('flowDoneAllView')) { backToSetupFromFlowScreens(); break; }
+      showToast('Flow en marcha. Para salir usa «Volver al programa».');
       return;
     case 'step3':
       if (isVisible('doneView')) { backToSetup(); break; }
-      showToast('Entrenamiento en marcha. Para salir usa «Volver a configurar».');
+      showToast('Entrenamiento en marcha. Para salir usa «Volver al programa».');
       return;
     default:
       return;
