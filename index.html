@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="Calistenia">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230f172a'/><text y='.9em' font-size='80'>🏋️</text></svg>">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏋️</text></svg>">
-<title>Calistenia Trainer v42</title>
+<title>Calistenia Trainer v43</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
@@ -84,6 +84,11 @@
   .exercise-name { font-size: 1.6rem; font-weight: 800; margin: 0.3rem 0 0.6rem; min-height: 2.2rem; }
   .timer { font-size: 4rem; font-weight: 800; margin: 0.3rem 0; font-family: monospace; }
   .timer.work { color: #4ade80; }
+  .timer.count { font-size: 3.4rem; letter-spacing: 0.02em; }
+  .speed-bar { display: flex; gap: 0.4rem; align-items: center; justify-content: center; margin: 0.2rem 0 0.6rem; flex-wrap: wrap; }
+  .speed-bar .speed-label { width: 100%; font-size: 0.78rem; color: #94a3b8; }
+  .speed-bar button { width: auto; flex: 1; margin: 0; padding: 0.45rem 0.4rem; font-size: 0.85rem; background: #334155; }
+  .speed-bar button.active { background: #0284c7; }
   .timer.rest { color: #facc15; }
   .timer.warmup { color: #818cf8; }
   .progress { color: #94a3b8; font-size: 0.85rem; margin-bottom: 0.8rem; }
@@ -140,7 +145,7 @@
 
 <!-- Paso 1: Inicio -->
 <div class="card" id="step1">
-  <h1>Programa de calistenia<br>UMBRAKABLE 50 sesiones<br><span class="subtitle-author">(de Marcos Vázquez) · v42</span></h1>
+  <h1>Programa de calistenia<br>UMBRAKABLE 50 sesiones<br><span class="subtitle-author">(de Marcos Vázquez) · v43</span></h1>
   <div class="reminder">Recuerda hacer 5 sesiones por semana (la 5ª sesión es de Flow).</div>
 
   <button onclick="openMusicList()" class="btn-secondary">🎵 ¿Quieres reproducir una canción de fondo?</button>
@@ -247,6 +252,12 @@
     <a id="exerciseVideoLink" class="video-link-inline hidden" target="_blank" rel="noopener">▶ Ver vídeo del ejercicio</a>
     <div class="progress" id="progressLabel"></div>
     <div class="timer work" id="timerDisplay">00:00</div>
+    <div id="speedBar" class="speed-bar hidden">
+      <span class="speed-label">Ritmo del conteo (se recuerda para este ejercicio)</span>
+      <button type="button" data-speed="lento" onclick="setSpeed('lento')">🐢 Lento</button>
+      <button type="button" data-speed="medio" onclick="setSpeed('medio')">Medio</button>
+      <button type="button" data-speed="rapido" onclick="setSpeed('rapido')">🐇 Rápido</button>
+    </div>
     <div class="next-up" id="nextUpLabel"></div>
 
     <div class="controls">
@@ -259,9 +270,6 @@
       <div class="live-adjust-title" id="currentExerciseDuration" style="color: #38bdf8; font-weight: 700; margin-bottom: 0.6rem;">⏱️ Duración: 40s</div>
       <div class="live-adjust-title">Ajustar de aquí en adelante:</div>
       <div class="live-adjust-row">
-        <label>Repeticiones (seg)
-          <input type="number" id="liveWork" min="5">
-        </label>
         <label>Descanso (seg)
           <input type="number" id="liveRest" min="0">
         </label>
@@ -500,7 +508,7 @@ function renderPlanHtml(plan) {
       html += planRowHtml(exs[0], tags);
     }
   });
-  html += '<p class="hint">Los de repeticiones tienen 30 s de cronómetro: pulsa «Hecho» si acabas antes.</p></div>';
+  html += '<p class="hint">En los de repeticiones la app cuenta en voz alta; el ritmo (lento, medio o rápido) lo eliges en cada ejercicio.</p></div>';
 
   if (plan.flow || !plan.m.length) return html;   // sesión de Flow: el entrenamiento va en su propio apartado
   html += '<h2>2 Entrenamiento</h2>';
@@ -857,6 +865,50 @@ function formatTime(s) {
   return `${mins}:${secs}`;
 }
 
+/* ---------- CONTEO DE REPETICIONES EN VOZ ALTA ---------- */
+const SPEEDS = { lento: 4, medio: 2, rapido: 1 };   // segundos por repetición
+const SPEED_NAMES = { lento: 'lento', medio: 'medio', rapido: 'rápido' };
+const COUNT_LEAD = 6;        // segundos para colocarse y oír la frase antes del «uno»
+const PACE_KEY = 'calistenia-ritmos';
+let pacePrefs = {};
+let currentPace = SPEEDS.medio;
+function isFastRep(name) { return /escaladores|saltar a la cuerda/i.test(name); }
+function paceKey(name) { return weightKey(name); }            // mismo ejercicio en todas las sesiones y lados
+function speedFor(name) { return pacePrefs[paceKey(name)] || (isFastRep(name) ? 'rapido' : 'medio'); }
+function paceFor(name) { return SPEEDS[speedFor(name)]; }
+async function loadPacePrefs() {
+  const raw = await storageGetSafe(PACE_KEY);
+  try { pacePrefs = raw ? JSON.parse(raw) : {}; } catch (e) { pacePrefs = {}; }
+}
+
+function setSpeed(speed) {
+  const seg = segments[currentIndex];
+  if (!seg || !seg.countReps || !SPEEDS[speed]) return;
+  const key = paceKey(seg.exName);
+  pacePrefs[key] = speed;
+  storageSetSafe(PACE_KEY, JSON.stringify(pacePrefs));
+  const newPace = SPEEDS[speed];
+  for (let i = currentIndex; i < segments.length; i++) {
+    const s = segments[i];
+    if (!s.countReps || paceKey(s.exName) !== key) continue;
+    if (i === currentIndex) {
+      const elapsedTotal = s.duration - timeLeft;
+      const done = repsDone(s, timeLeft);
+      s.pace = newPace;
+      s.duration = COUNT_LEAD + s.countReps * newPace;
+      timeLeft = elapsedTotal < COUNT_LEAD ? s.duration - elapsedTotal : s.duration - COUNT_LEAD - done * newPace;
+    } else {
+      s.pace = newPace;
+      s.duration = COUNT_LEAD + s.countReps * newPace;
+    }
+  }
+  render();
+}
+function repsDone(seg, tl) {
+  const elapsed = seg.duration - tl - COUNT_LEAD;
+  return Math.max(0, Math.min(seg.countReps, Math.floor(elapsed / seg.pace)));
+}
+
 function buildPlanSegments(plan, repSec, flowSession) {
   const segs = [];
 
@@ -873,9 +925,12 @@ function buildPlanSegments(plan, repSec, flowSession) {
     const name = it.side ? `${name0} ${it.side}` : name0;
     let label = med === 's' ? `${name} (${q}s)` : `${name} (${q} reps)`;
     if (it.x > 1) label += ` · ${it.v} de ${it.x}`;
+    const countW = med !== 's' && q > 1;          // «Giros articulares 1 rep» sigue con cronómetro
+    const paceW = countW ? paceFor(name0) : 0;
     segs.push({
       name: label, isRest: false, isWarmup: true,
-      duration: med === 's' ? q : (i === 0 ? 60 : 30),
+      duration: med === 's' ? q : (countW ? COUNT_LEAD + q * paceW : (i === 0 ? 60 : 30)),
+      countReps: countW ? q : 0, pace: paceW, fastPace: countW && isFastRep(name0), exName: name0,
       posInGroup: i + 1, totalInGroup: wList.length
     });
   });
@@ -913,7 +968,8 @@ function buildPlanSegments(plan, repSec, flowSession) {
         segs.push({
           name: label, isRest: false, isWarmup: false,
           isReps: med !== 's', autoStart: b.t === 't',
-          duration: med === 's' ? qq : repSec,
+          countReps: med !== 's' ? qq : 0, pace: med !== 's' ? paceFor(name) : 0, fastPace: med !== 's' && isFastRep(name), exName: name,
+          duration: med === 's' ? qq : COUNT_LEAD + qq * paceFor(name),
           posInGroup: exNum + j + 1, totalInGroup: totalEx,
           round: v, totalRounds: b.x,
           blockEnd: v === b.x && j === b.ex.length - 1,
@@ -940,8 +996,7 @@ let currentRepSec = 60;
 let lastWeightIndex = -1;
 
 function startWorkout() {
-  const repSec = 60;   // cronómetro inicial de los ejercicios de repeticiones (se ajusta dentro de cada ejercicio)
-  currentRepSec = repSec;
+  const repSec = 60;
   currentSessionIsFlow = (selectedSessionNumber % 5 === 0);
   const plan = SESSION_PLAN[selectedSessionNumber];
   if (!plan) {
@@ -1028,7 +1083,17 @@ function render() {
   }
   document.getElementById('progressLabel').innerText = progressText(seg);
 
-  timerDisplay.innerText = formatTime(timeLeft);
+  const speedBar = document.getElementById('speedBar');
+  if (seg.countReps && !seg.isRest) {
+    timerDisplay.classList.add('count');
+    timerDisplay.innerText = `${repsDone(seg, timeLeft)}/${seg.countReps}`;
+    const active = Object.keys(SPEEDS).find(k => SPEEDS[k] === seg.pace);
+    speedBar.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.speed === active));
+    speedBar.classList.remove('hidden');
+  } else {
+    timerDisplay.innerText = formatTime(timeLeft);
+    speedBar.classList.add('hidden');
+  }
   document.getElementById('nextUpLabel').innerText = nextSeg
     ? `Siguiente: ${nextSeg.isRest ? `Descanso ${nextSeg.duration} s` : nextSeg.name}`
     : 'Último ejercicio';
@@ -1043,15 +1108,13 @@ function render() {
   const liveAdjust = document.getElementById('liveAdjust');
   if (!seg.isWarmup && !seg.isRest && !seg.isFixed && !seg.autoStart) {
     liveAdjust.classList.remove('hidden');
-    const wIn = document.getElementById('liveWork');
     const rIn = document.getElementById('liveRest');
     const nextRest = segments.slice(currentIndex + 1).find(s => s.isRest);
-    if (document.activeElement !== wIn) wIn.value = currentRepSec;
     if (document.activeElement !== rIn) rIn.value = nextRest ? nextRest.duration : '';
     const durationHint = document.getElementById('currentExerciseDuration');
     if (durationHint) {
-      durationHint.innerText = seg.isReps
-        ? `⏱️ ${seg.duration}s · repeticiones: pulsa «Hecho» al terminar`
+      durationHint.innerText = seg.countReps
+        ? `🔢 ${seg.countReps} repeticiones · ritmo ${SPEED_NAMES[Object.keys(SPEEDS).find(k => SPEEDS[k] === seg.pace)] || seg.pace + ' s'}`
         : `⏱️ ${seg.duration}s`;
     }
   } else {
@@ -1060,29 +1123,15 @@ function render() {
 }
 
 function applyLiveAdjust() {
-  const wVal = parseInt(document.getElementById('liveWork').value);
   const rStr = String(document.getElementById('liveRest').value).trim();
-  const newWork = Math.max(5, wVal || currentRepSec);
-  const newRest = rStr === '' ? null : Math.max(0, parseInt(rStr) || 0);
-  currentRepSec = newWork;
-
-  // Solo cambia los ejercicios de repeticiones y los descansos (no los de segundos ni las tabatas)
-  for (let i = currentIndex; i < segments.length; i++) {
+  if (rStr === '') return;
+  const newRest = Math.max(0, parseInt(rStr) || 0);
+  for (let i = currentIndex + 1; i < segments.length; i++) {
     const s = segments[i];
-    if (s.isWarmup) continue;
-    if (s.isRest) {
-      if (newRest !== null && !s.isTabataRest) s.duration = newRest;
-    } else if (s.isReps) {
-      s.duration = newWork;
-    }
+    if (s.isRest && !s.isTabataRest) s.duration = newRest;
   }
-
-  const seg = segments[currentIndex];
-  if (seg.isReps) timeLeft = newWork;
   render();
-  speakSequential([newRest !== null
-    ? `Ajustado. Repeticiones ${newWork} segundos, descanso ${newRest} segundos`
-    : `Ajustado. Repeticiones ${newWork} segundos`]);
+  speakSequential([`Ajustado. Descanso ${newRest} segundos`]);
 }
 
 function handleSegmentEnd() {
@@ -1222,6 +1271,17 @@ function runTick() {
   if (finished || paused) return;
   if (timeLeft <= 0) {
     handleSegmentEnd();
+    return;
+  }
+  const curSeg = segments[currentIndex];
+  if (curSeg && curSeg.countReps) {
+    timeLeft--;
+    const elapsed = curSeg.duration - timeLeft - COUNT_LEAD;
+    if (elapsed > 0 && elapsed % curSeg.pace === 0) {
+      const k = elapsed / curSeg.pace;
+      if (k >= 1 && k <= curSeg.countReps) speakNumber(k);
+    }
+    render();
     return;
   } else {
     if (timeLeft === 3 || timeLeft === 2 || timeLeft === 1) {
@@ -1661,6 +1721,7 @@ async function celebrateSessionComplete(type) {
 renderSongList();
 initSessionSelector();
 loadWeights();
+loadPacePrefs();
 
 /* ---------- MANTENER PANTALLA ENCENDIDA (Wake Lock) ---------- */
 let wakeLock = null;
